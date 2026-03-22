@@ -16,38 +16,39 @@ chainwatch/
 │   │   │   └── config.py     # Pydantic-Settings (env vars)
 │   │   ├── models/
 │   │   │   └── schemas.py    # Request / response schemas
-│   │   ├── services/
-│   │   │   ├── blockchain_tools.py  # LangChain tools (balance, yields, news)
-│   │   │   └── agent_service.py     # LangGraph agent + SSE streaming bridge
+│   │   ├── services/         # Core business logic and integrations
+│   │   │   ├── registry.py   # Central service registry and dependency injection
+│   │   │   ├── agent/        # Agent logic, agent pool, prompts
+│   │   │   ├── portfolio/    # Cross-chain token discovery routines
+│   │   │   └── tools/        # LangChain tools (balance, yields, news, security)
 │   │   └── api/v1/
-│   │       ├── analysis.py   # GET /api/v1/analysis/stream  (SSE)
+│   │       ├── analysis.py   # /portfolio, /stream (SSE), /status
 │   │       └── health.py     # GET /api/v1/health
 │   └── requirements.txt
 │
 └── frontend/                 # React 18 + TypeScript + Vite + Tailwind
     └── src/
-        ├── api/              # SSE client hook (useAnalysis)
+        ├── api/              # API clients and SSE hooks
         ├── components/
-        │   ├── analysis/     # AddressInput, StepProgress, ToolCallFeed,
-        │   │                 # ScanningVisual, ReportDisplay
-        │   ├── layout/       # Header
-        │   └── ui/           # CyberPanel, GlitchText, MatrixRain, TerminalLog
+        │   ├── analysis/     # AddressInput, TokenSelectionDialog, ReportDisplay, SupportedNetworks
+        │   ├── layout/       # Header, Footer
+        │   └── ui/           # Custom cyberpunk styled UI components
         ├── hooks/
-        ├── pages/            # HomePage
-        ├── store/            # Zustand (analysisStore)
+        ├── pages/            # App pages
+        ├── store/            # Zustand state management
         ├── types/            # TypeScript interfaces
-        └── utils/            # Helpers (formatElapsed, detectChain, …)
+        └── utils/            # Formatting and blockchain detection helpers
 ```
 
 ---
 
 ## Prerequisites
 
-| Tool | Version |
-|------|---------|
-| Python | ≥ 3.11 |
-| Node.js | ≥ 20 |
-| npm / pnpm | any recent |
+| Tool                     | Version                                                 |
+| ------------------------ | ------------------------------------------------------- |
+| Python                   | ≥ 3.11                                                  |
+| Node.js                  | ≥ 20                                                    |
+| npm / pnpm               | any recent                                              |
 | OpenGradient private key | from [app.opengradient.ai](https://app.opengradient.ai) |
 
 ---
@@ -100,33 +101,47 @@ Frontend available at **http://localhost:5173**
 
 ### Backend (`backend/.env`)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OG_PRIVATE_KEY` | ✅ | OpenGradient wallet private key |
+| Variable          | Required | Description                                    |
+| ----------------- | -------- | ---------------------------------------------- |
+| `OG_PRIVATE_KEY`  | ✅       | OpenGradient wallet private key                |
 | `FRONTEND_ORIGIN` | optional | CORS origin (default: `http://localhost:5173`) |
 
 ---
 
-## SSE Event Protocol
+## API & SSE Event Protocol
 
-The analysis endpoint `GET /api/v1/analysis/stream?address=<addr>` streams newline-delimited JSON events:
+The backend exposes the following key endpoints under `/api/v1/analysis`:
 
-| `type` | Payload fields | Description |
-|--------|---------------|-------------|
-| `status` | `message` | Informational log line |
-| `step_start` | `step`, `title` | A pipeline step begins |
-| `step_complete` | `step` | A pipeline step finished |
-| `tool_call` | `name`, `args`, `call_id` | Agent invokes a tool |
-| `tool_result` | `name`, `content`, `call_id` | Tool returned a result |
-| `complete` | `report` | Final markdown report |
-| `error` | `message` | Fatal error |
-| `stream_end` | — | Stream sentinel — close connection |
+1. **`GET /portfolio?address=<addr>`**
+   Fetches the token portfolio for a wallet address across all supported chains.
+
+2. **`GET /stream?address=<addr>&token=<token>&network=<network>`**
+   SSE endpoint that streams real-time wallet analysis events. It can optionally focus the analysis pipeline onto a specific token and network.
+
+3. **`GET /status`**
+   Returns the current operational status and load of the backend agent pool queue.
+
+### Streaming Events
+
+The `/stream` endpoint emits the following newline-delimited JSON events:
+
+| `type`          | Payload fields               | Description                        |
+| --------------- | ---------------------------- | ---------------------------------- |
+| `status`        | `message`                    | Informational log line             |
+| `step_start`    | `step`, `title`              | A pipeline step begins             |
+| `step_complete` | `step`                       | A pipeline step finished           |
+| `tool_call`     | `name`, `args`, `call_id`    | Agent invokes a tool               |
+| `tool_result`   | `name`, `content`, `call_id` | Tool returned a result             |
+| `complete`      | `report`                     | Final markdown report              |
+| `error`         | `message`                    | Fatal error                        |
+| `stream_end`    | —                            | Stream sentinel — close connection |
 
 ---
 
 ## Tech Stack
 
 **Backend**
+
 - FastAPI 0.111 + Uvicorn (ASGI)
 - Pydantic v2 + pydantic-settings
 - opengradient==0.9.0 (TEE LLM adapter)
@@ -134,6 +149,7 @@ The analysis endpoint `GET /api/v1/analysis/stream?address=<addr>` streams newli
 - LangChain Core (tool definitions)
 
 **Frontend**
+
 - React 18 + TypeScript (strict)
 - Vite 5
 - Tailwind CSS 3
@@ -146,10 +162,10 @@ The analysis endpoint `GET /api/v1/analysis/stream?address=<addr>` streams newli
 
 ## Supported Chains
 
-| Chain | Detection | Native | Tokens |
-|-------|-----------|--------|--------|
-| Ethereum / EVM | `0x` + 40 hex | ETH | ERC-20 via Ankr |
-| Arbitrum | `0x` + 40 hex | ETH | ERC-20 via Ankr |
-| Solana | base58 32-44 | SOL | SPL (Token + Token-2022) |
-| SUI | `0x` + 64 hex | SUI | all coins |
-| Bitcoin | `bc1`/`1`/`3` | BTC | — |
+| Chain          | Detection     | Native | Tokens                   |
+| -------------- | ------------- | ------ | ------------------------ |
+| Ethereum / EVM | `0x` + 40 hex | ETH    | ERC-20 via Ankr          |
+| Arbitrum       | `0x` + 40 hex | ETH    | ERC-20 via Ankr          |
+| Solana         | base58 32-44  | SOL    | SPL (Token + Token-2022) |
+| SUI            | `0x` + 64 hex | SUI    | all coins                |
+| Bitcoin        | `bc1`/`1`/`3` | BTC    | —                        |
