@@ -31,28 +31,33 @@ async def get_historical_hacks(protocol_or_token: str) -> str:
         logger.debug(f"Using cached hacks data (age: {cache.age:.0f}s)")
     else:
         client = get_http_client()
-        hacks: list = []
+        hacks = "ERROR"
 
         for url in _HACKS_URLS:
             try:
                 resp = await client.get(url, timeout=20)
                 if resp.status_code == 200:
                     data = resp.json()
-                    hacks = (
+                    parsed = (
                         data.get("hacks", data.get("data", data))
                         if isinstance(data, dict)
                         else data
                     )
-                    if hacks:
+                    if parsed:
+                        hacks = parsed
                         break
             except Exception as e:
                 logger.warning(f"DefiLlama hacks source failed: {url} - {e}")
 
-        if not hacks:
-            return "DefiLlama hacks DB temporarily unavailable. Try again in a few minutes."
+        if hacks == "ERROR":
+            logger.warning("All hacks sources failed, caching error state.")
+        else:
+            logger.info(f"Refreshed hacks cache with {len(hacks)} records")
 
         cache.set(hacks)
-        logger.info(f"Refreshed hacks cache with {len(hacks)} records")
+
+    if hacks == "ERROR" or not hacks:
+        return "DefiLlama hacks DB temporarily unavailable. Try again in a few minutes."
 
     keyword = protocol_or_token.lower()
     matches = [

@@ -29,10 +29,15 @@ DO NOT PERFORM STEP 1 (DISCOVERY) FROM SCRATCH. Work ONLY with the token {token}
 - Skipped, as the user has already selected the asset {token}{network_hint}.
 
 ### 2. Yield & Opportunity Analysis
-- Call `get_defi_yields` for {token}{yield_network}.
+- Call `get_defi_yields` for {token}{yield_network}. (Note: for native tokens like BNB, ETH, it will automatically search for wrapped variants like WBNB, WETH too).
 - Find the top 5 highest APY, lowest-risk farming opportunities for this asset.
 - IMPORTANT: Filter pools by the network "{network}" if specified.
 - Explain exactly what type of pool each recommended opportunity is (e.g., Staking, Lending, Liquidity Provision, etc.).
+- IF NO POOLS ARE FOUND for {token}:
+  1. Call `get_defi_yields` again for the network's native token (e.g., ETH, BNB, SOL) AND for a major stablecoin (e.g., USDC, USDT) on this network.
+  2. Advise the user to swap their '{token}' into the native token or stablecoin to access yield opportunities.
+  3. Present the alternative pools you found for the native token/stablecoin and provide their analysis.
+  4. Perform a swap simulation: explicitly state how many native tokens or stablecoins they would receive if they swapped their '{token}' balance, and show the equivalent value in USD (using the token prices you have fetched).
 
 ### 3. Security Audit & Hack History
 - Call `get_historical_hacks` for {token} or its protocol.
@@ -61,9 +66,14 @@ Be thorough - do NOT skip any step.
 - Do NOT guess balances. List every single asset found.
 
 ### 2. Yield & Opportunity Analysis
-- For EACH asset found, call `get_defi_yields`.
+- For EACH asset found, call `get_defi_yields`. (Note: for native tokens, it automatically searches wrapped variants like WBNB, WETH).
 - Find the top 3 highest APY, lowest-risk farming opportunities for these assets.
 - Explain exactly what type of pool each recommended opportunity is (e.g., Staking, Lending, Liquidity Provision, etc.).
+- IF NO POOLS ARE FOUND for an asset:
+  1. Call `get_defi_yields` again for the network's native token AND a major stablecoin (e.g., USDC, USDT).
+  2. Advise the user to swap their asset into the native token or stablecoin to earn yields.
+  3. Present the discovered alternative pools and their analysis.
+  4. Perform a swap simulation: explain how many native tokens or stablecoins they will receive for their balance, and state the total value in USD (using the fetched token prices).
 
 ### 3. Security Audit & Hack History
 - For EACH major protocol where the user holds tokens, call `get_historical_hacks`.

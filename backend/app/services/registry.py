@@ -28,7 +28,7 @@ class ServiceRegistry:
         )
         self.yields_cache = TTLCache(ttl_seconds=600.0)
         self.hacks_cache = TTLCache(ttl_seconds=600.0)
-        self.solana_token_cache = TTLCache(ttl_seconds=3600.0)
+        self.solana_token_cache = TTLCache(ttl_seconds=600.0)
 
         # Lazy import to avoid circular deps (pool.py imports from tools/)
         from app.services.agent.pool import AgentPool
