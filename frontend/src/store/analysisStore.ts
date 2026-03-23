@@ -115,7 +115,7 @@ export const useAnalysisStore = create<AnalysisStore>((set) => ({
 
   reset: () => set({ ...initialState, steps: DEFAULT_STEPS.map((s) => ({ ...s })) }),
 
-  resetForNewToken: () => set((s) => ({
+  resetForNewToken: () => set(() => ({
     phase: "selecting",
     steps: DEFAULT_STEPS.map((step) => ({ ...step })),
     toolCalls: [],

@@ -24,7 +24,6 @@ export function HomePage() {
     statusMessages,
     report,
     error,
-    elapsedMs,
   } = useAnalysisStore();
 
   const { startAnalysis, cancel } = useAnalysis();

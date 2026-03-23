@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import { Search, Zap, Shield } from "lucide-react";
-import { CyberPanel } from "@/components/ui/CyberPanel";
 import { detectChain, cn } from "@/utils";
 
 interface Props {

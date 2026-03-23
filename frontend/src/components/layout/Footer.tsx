@@ -1,4 +1,4 @@
-import { Cpu, Wifi, Shield, Zap, Github, Twitter, Disc as Discord } from "lucide-react";
+import { Cpu, Shield, Zap, Github, Twitter, Disc as Discord } from "lucide-react";
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
