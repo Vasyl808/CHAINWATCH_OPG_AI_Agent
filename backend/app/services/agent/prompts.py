@@ -33,6 +33,11 @@ DO NOT PERFORM STEP 1 (DISCOVERY) FROM SCRATCH. Work ONLY with the token {token}
 - Find the top 5 highest APY, lowest-risk farming opportunities for this asset.
 - IMPORTANT: Filter pools by the network "{network}" if specified.
 - Explain exactly what type of pool each recommended opportunity is (e.g., Staking, Lending, Liquidity Provision, etc.).
+- FOR LIQUIDITY PROVISION (LP) POOLS:
+  1. Note that LP pools require TWO tokens in equal value.
+  2. Check if the user already holds the paired token in their wallet.
+  3. If they DON'T have the paired token: explain they need to swap ~50% of their {token} for the paired token.
+  4. Show a swap simulation: how much of the paired token they'd get, and the total LP position value in USD.
 - IF NO POOLS ARE FOUND for {token}:
   1. Call `get_defi_yields` again for the network's native token (e.g., ETH, BNB, SOL) AND for a major stablecoin (e.g., USDC, USDT) on this network.
   2. Advise the user to swap their '{token}' into the native token or stablecoin to access yield opportunities.
@@ -40,7 +45,8 @@ DO NOT PERFORM STEP 1 (DISCOVERY) FROM SCRATCH. Work ONLY with the token {token}
   4. Perform a swap simulation: explicitly state how many native tokens or stablecoins they would receive if they swapped their '{token}' balance, and show the equivalent value in USD (using the token prices you have fetched).
 
 ### 3. Security Audit & Hack History
-- Call `get_historical_hacks` for {token} or its protocol.
+- Call `get_historical_hacks` ONLY for the TOP protocol providers found in Step 2 (yield analysis).
+- Do NOT check hacks for all protocols - only check the top 3-5 providers you recommended.
 - If a protocol has been hacked recently or funds weren't returned, flag it as HIGH RISK.
 
 ### 4. Token News & Sentiment Profiling
@@ -69,6 +75,11 @@ Be thorough - do NOT skip any step.
 - For EACH asset found, call `get_defi_yields`. (Note: for native tokens, it automatically searches wrapped variants like WBNB, WETH).
 - Find the top 3 highest APY, lowest-risk farming opportunities for these assets.
 - Explain exactly what type of pool each recommended opportunity is (e.g., Staking, Lending, Liquidity Provision, etc.).
+- FOR LIQUIDITY PROVISION (LP) POOLS:
+  1. Note that LP pools require TWO tokens in equal value.
+  2. Check if the user already holds the paired token in their wallet (from Step 1 results).
+  3. If they DON'T have the paired token: explain they need to swap ~50% of their asset for the paired token.
+  4. Show a swap simulation: how much of the paired token they'd get, and the total LP position value in USD.
 - IF NO POOLS ARE FOUND for an asset:
   1. Call `get_defi_yields` again for the network's native token AND a major stablecoin (e.g., USDC, USDT).
   2. Advise the user to swap their asset into the native token or stablecoin to earn yields.
@@ -76,7 +87,8 @@ Be thorough - do NOT skip any step.
   4. Perform a swap simulation: explain how many native tokens or stablecoins they will receive for their balance, and state the total value in USD (using the fetched token prices).
 
 ### 3. Security Audit & Hack History
-- For EACH major protocol where the user holds tokens, call `get_historical_hacks`.
+- Call `get_historical_hacks` ONLY for the TOP protocol providers found in Step 2 (yield analysis).
+- Do NOT check hacks for all protocols - only check the top 3-5 providers you recommended across all assets.
 - If a protocol has been hacked recently or funds weren't returned, flag it as HIGH RISK.
 
 ### 4. Token News & Sentiment Profiling

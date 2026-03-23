@@ -15,11 +15,11 @@ class Settings(BaseSettings):
 
     max_concurrent_agents: int = 5
     max_queue_depth: int = 20
-    agent_timeout_seconds: int = 300
+    agent_timeout_seconds: int = 600
 
     og_model_cid: str = "anthropic/claude-4.0-sonnet"
-    og_llm_max_tokens: int = 1600
-    og_opg_approval_amount: int = 1
+    og_llm_max_tokens: int = 50000
+    og_opg_approval_amount: int = 10
 
     og_agent_address: str = "0xEaD1B6dF9F22E5b697d802873dfd36401855b0a1"
     faucet_interval_seconds: int = 18300
