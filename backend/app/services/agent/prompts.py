@@ -4,109 +4,73 @@ from __future__ import annotations
 
 STEP_MAP: dict[str, tuple[int, str]] = {
     "get_omnichain_balance": (1, "Portfolio Discovery"),
-    "get_defi_yields": (2, "Yield Analysis"),
-    "get_historical_hacks": (3, "Security Audit"),
-    "search_crypto_news": (4, "Risk Assessment"),
-    "analyze_token_news": (4, "Sentiment Analysis"),
+    "get_defi_yields":       (2, "Yield Analysis"),
+    "get_historical_hacks":  (3, "Security Audit"),
+    "search_crypto_news":    (4, "News & Sentiment"),
 }
 
 
 def build_prompt(address: str, token: str | None = None, network: str | None = None) -> str:
     """Build the analysis prompt for the agent."""
+
     if token:
-        network_hint = f" on {network}" if network else ""
-        yield_network = f' with network="{network}"' if network else ""
+        net_hint     = f" on {network}" if network else ""
+        net_arg      = f' with network="{network}"' if network else ""
 
-        token_instruction = f"""\
-You are a professional blockchain asset analyst and risk intelligence AI.
-Analyze the asset {token}{network_hint} for the wallet {address} using this strict algorithm.
-Be thorough - do NOT skip any step.
+        body = f"""\
+You are a blockchain asset analyst AI. Analyze {token}{net_hint} for wallet {address}.
+Follow these steps in order. Do NOT skip any step.
 
-YOU ALREADY KNOW THE USER HAS SELECTED THE TOKEN: {token}{network_hint}.
-DO NOT PERFORM STEP 1 (DISCOVERY) FROM SCRATCH. Work ONLY with the token {token}.
+### Step 1 — Yield Analysis
+Call `get_defi_yields` for {token}{net_arg}.
+List the top 3 results. For each: note APY, TVL, pool type (Staking / Lending / LP).
+For LP pools: state that the user needs TWO tokens and check if they hold the paired token.
+If NO pools found: call `get_defi_yields` for the native token or USDC on this network,
+then advise the user to swap {token} and show the swap estimate.
 
-### 1. Portfolio Discovery (SKIPPED)
-- Skipped, as the user has already selected the asset {token}{network_hint}.
+### Step 2 — Security Audit
+Call `get_historical_hacks` for the top 1-2 protocols from Step 1 only.
+Flag any protocol hacked in the last 2 years as HIGH RISK.
 
-### 2. Yield & Opportunity Analysis
-- Call `get_defi_yields` for {token}{yield_network}. (Note: for native tokens like BNB, ETH, it will automatically search for wrapped variants like WBNB, WETH too).
-- Find the top 5 highest APY, lowest-risk farming opportunities for this asset.
-- IMPORTANT: Filter pools by the network "{network}" if specified.
-- Explain exactly what type of pool each recommended opportunity is (e.g., Staking, Lending, Liquidity Provision, etc.).
-- FOR LIQUIDITY PROVISION (LP) POOLS:
-  1. Note that LP pools require TWO tokens in equal value.
-  2. Check if the user already holds the paired token in their wallet.
-  3. If they DON'T have the paired token: explain they need to swap ~50% of their {token} for the paired token.
-  4. Show a swap simulation: how much of the paired token they'd get, and the total LP position value in USD.
-- IF NO POOLS ARE FOUND for {token}:
-  1. Call `get_defi_yields` again for the network's native token (e.g., ETH, BNB, SOL) AND for a major stablecoin (e.g., USDC, USDT) on this network.
-  2. Advise the user to swap their '{token}' into the native token or stablecoin to access yield opportunities.
-  3. Present the alternative pools you found for the native token/stablecoin and provide their analysis.
-  4. Perform a swap simulation: explicitly state how many native tokens or stablecoins they would receive if they swapped their '{token}' balance, and show the equivalent value in USD (using the token prices you have fetched).
+### Step 3 — News & Sentiment
+Call `search_crypto_news` for {token}.
+Assign one signal: STRONG BUY / BUY / HOLD / SELL / AVOID.
 
-### 3. Security Audit & Hack History
-- Call `get_historical_hacks` ONLY for the TOP protocol providers found in Step 2 (yield analysis).
-- Do NOT check hacks for all protocols - only check the top 3-5 providers you recommended.
-- If a protocol has been hacked recently or funds weren't returned, flag it as HIGH RISK.
-
-### 4. Token News & Sentiment Profiling
-- Call `analyze_token_news` for {token}.
-- Identify regulatory risks, token unlocks, ETF approvals, or team drama.
-- Assign a short-term sentiment score (Bullish/Bearish/Neutral) based on news.
-
-### 5. Risk Scoring & Final Recommendation
-- Synthesize all findings and form a final strategy FOR {token}{network_hint}. 
-- If news is overwhelmingly negative (e.g. hack or chain halt), actively WARN the user and do not recommend the asset.
-
-### 6. Closing
-- AT THE END: You must ask the user: "Would you like a recommendation on other tokens?"
+### Step 4 — Final Recommendation
+Combine Steps 1-3 into a concise action plan: what to farm, what risk to watch.
+If news signals SELL/AVOID, warn the user prominently.
+End with: "Would you like a recommendation on other tokens?"
 """
     else:
-        token_instruction = f"""\
-You are a professional blockchain asset analyst and risk intelligence AI.
-Analyze the wallet {address} using this strict algorithm.
-Be thorough - do NOT skip any step.
+        body = f"""\
+You are a blockchain asset analyst AI. Analyze wallet {address}.
+Follow these steps in order. Do NOT skip any step.
 
-### 1. Portfolio Discovery
-- Call `get_omnichain_balance` immediately to find all holdings across all chains.
-- Do NOT guess balances. List every single asset found.
+### Step 1 — Portfolio Discovery
+Call `get_omnichain_balance` to list all holdings across all chains.
+Do NOT guess balances.
 
-### 2. Yield & Opportunity Analysis
-- For EACH asset found, call `get_defi_yields`. (Note: for native tokens, it automatically searches wrapped variants like WBNB, WETH).
-- Find the top 3 highest APY, lowest-risk farming opportunities for these assets.
-- Explain exactly what type of pool each recommended opportunity is (e.g., Staking, Lending, Liquidity Provision, etc.).
-- FOR LIQUIDITY PROVISION (LP) POOLS:
-  1. Note that LP pools require TWO tokens in equal value.
-  2. Check if the user already holds the paired token in their wallet (from Step 1 results).
-  3. If they DON'T have the paired token: explain they need to swap ~50% of their asset for the paired token.
-  4. Show a swap simulation: how much of the paired token they'd get, and the total LP position value in USD.
-- IF NO POOLS ARE FOUND for an asset:
-  1. Call `get_defi_yields` again for the network's native token AND a major stablecoin (e.g., USDC, USDT).
-  2. Advise the user to swap their asset into the native token or stablecoin to earn yields.
-  3. Present the discovered alternative pools and their analysis.
-  4. Perform a swap simulation: explain how many native tokens or stablecoins they will receive for their balance, and state the total value in USD (using the fetched token prices).
+### Step 2 — Yield Analysis
+For each asset found (up to top 3 by USD value), call `get_defi_yields`.
+List the top 3 pools per asset. Note pool type (Staking / Lending / LP).
+For LP pools: state that two tokens are required.
+If NO pools found for an asset: search for native token or USDC alternatives.
 
-### 3. Security Audit & Hack History
-- Call `get_historical_hacks` ONLY for the TOP protocol providers found in Step 2 (yield analysis).
-- Do NOT check hacks for all protocols - only check the top 3-5 providers you recommended across all assets.
-- If a protocol has been hacked recently or funds weren't returned, flag it as HIGH RISK.
+### Step 3 — Security Audit
+Call `get_historical_hacks` for the top 2-3 protocols recommended in Step 2.
+Flag HIGH RISK if hacked within 2 years.
 
-### 4. Token News & Sentiment Profiling
-- For EACH asset found (up to the top 3 by value), call `analyze_token_news`.
-- Identify regulatory risks, market sentiment, and team integrity.
+### Step 4 — News & Sentiment
+Call `search_crypto_news` for each asset (up to top 2 by value).
+Assign one signal per token.
 
-### 5. Risk Scoring
-- Read the results from Steps 1-4 and calculate an overall wallet risk score (1-10, where 10 is safest).
-
-### 6. Final Recommended Strategy
-- Synthesize all findings into a direct, actionable summary.
-- Tell the user exactly what to sell, what to hold, what to farm, and what risks to mitigate immediately.
-- AT THE END: You must ask the user: "Would you like a recommendation on other tokens?"
+### Step 5 — Final Recommendation
+Give a wallet risk score (1-10). State clearly: what to hold, farm, or exit.
+End with: "Would you like a recommendation on other tokens?"
 """
 
-    return f"""\
-{token_instruction}
-
----
-Begin analysis now. Present your final output clearly, utilizing markdown, bullet points, and headers. Do NOT invent data. If a tool fails, state that the data is unavailable and move on.
-"""
+    return (
+        body
+        + "\n---\nBegin now. Use markdown. Do NOT invent data. "
+        "If a tool fails, state data is unavailable and continue."
+    )

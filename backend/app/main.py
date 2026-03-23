@@ -1,4 +1,6 @@
 import asyncio
+import os
+import psutil
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,6 +11,20 @@ from app.core.config import settings
 from app.services.faucet import auto_faucet_task
 from app.services.registry import init_registry
 
+
+async def log_memory_usage():
+    """Background task to print RAM usage."""
+    process = psutil.Process(os.getpid())
+    while True:
+        try:
+            mem_mb = process.memory_info().rss / (1024 * 1024)
+            print(f"RAM USAGE: {mem_mb:.2f} MB", flush=True)
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"Error logging memory: {e}", flush=True)
+            await asyncio.sleep(60)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,13 +40,15 @@ async def lifespan(app: FastAPI):
 
     # Start background auto-faucet task
     faucet_task = asyncio.create_task(auto_faucet_task())
+    mem_log_task = asyncio.create_task(log_memory_usage())
 
     yield
 
     print("ChainWatch API shutting down")
     faucet_task.cancel()
+    mem_log_task.cancel()
     try:
-        await faucet_task
+        await asyncio.gather(faucet_task, mem_log_task, return_exceptions=True)
     except asyncio.CancelledError:
         pass
     await registry.shutdown()

@@ -6,7 +6,17 @@ import asyncio
 import json
 import traceback
 import warnings
+import logging
+import psutil
+import os
 from typing import Any, AsyncGenerator
+
+logger = logging.getLogger(__name__)
+
+def _log_ram(context: str):
+    process = psutil.Process(os.getpid())
+    rss_mb = process.memory_info().rss / (1024 * 1024)
+    logger.info(f"[RAM LOG PID:{os.getpid()}] {context}: {rss_mb:.2f} MB")
 
 import opengradient as og
 from langchain_core.messages import AIMessage, ToolMessage
@@ -83,9 +93,11 @@ class AgentPool:
         Yields SSE-formatted strings for a full wallet analysis.
         Enforces concurrency limits and yields queue position updates if waiting.
         """
+        _log_ram(f"stream_analysis START for address {address}")
         yield _make_sse({"type": "status", "message": "Connecting to TEE agent pool..."})
 
         await asyncio.to_thread(self._ensure_initialized)
+        _log_ram("stream_analysis after ensure_initialized")
 
         if self._semaphore.locked():
             waiter = asyncio.Event()
@@ -131,6 +143,7 @@ class AgentPool:
         finally:
             self._active_count -= 1
             self._semaphore.release()
+            _log_ram("stream_analysis END for address " + address)
             yield _make_sse({"type": "stream_end"})
 
     async def _run_agent(
@@ -142,54 +155,71 @@ class AgentPool:
         notified_steps: set[int] = set()
         prompt = build_prompt(address, token, network)
 
-        async with asyncio.timeout(300):
-            async for chunk in self._agent.astream({"messages": [("user", prompt)]}):
-                if "agent" in chunk:
-                    msg: AIMessage = chunk["agent"]["messages"][0]
+        async def _log_agent_ram():
+            try:
+                while True:
+                    await asyncio.sleep(10)
+                    _log_ram("Agent working")
+            except asyncio.CancelledError:
+                pass
 
-                    if hasattr(msg, "tool_calls") and msg.tool_calls:
-                        for tc in msg.tool_calls:
-                            tool_name: str = tc["name"]
-                            call_id: str = tc["id"]
-                            args: dict = tc["args"]
+        logger_task = asyncio.create_task(_log_agent_ram())
 
-                            if tool_name in STEP_MAP:
-                                step_num, step_title = STEP_MAP[tool_name]
-                                if step_num not in notified_steps:
-                                    notified_steps.add(step_num)
-                                    yield _make_sse({
-                                        "type": "step_start",
-                                        "step": step_num,
-                                        "title": step_title,
-                                    })
+        try:
+            async with asyncio.timeout(300):
+                async for chunk in self._agent.astream({"messages": [("user", prompt)]}):
+                    if "agent" in chunk:
+                        msg: AIMessage = chunk["agent"]["messages"][0]
+
+                        if hasattr(msg, "tool_calls") and msg.tool_calls:
+                            for tc in msg.tool_calls:
+                                tool_name: str = tc["name"]
+                                call_id: str = tc["id"]
+                                args: dict = tc["args"]
+
+                                if tool_name in STEP_MAP:
+                                    step_num, step_title = STEP_MAP[tool_name]
+                                    if step_num not in notified_steps:
+                                        notified_steps.add(step_num)
+                                        yield _make_sse({
+                                            "type": "step_start",
+                                            "step": step_num,
+                                            "title": step_title,
+                                        })
+
+                                yield _make_sse({
+                                    "type": "tool_call",
+                                    "name": tool_name,
+                                    "args": args,
+                                    "call_id": call_id,
+                                })
+
+                        elif msg.content:
+                            yield _make_sse(
+                                {"type": "step_start", "step": 4, "title": "Final Recommendation"}
+                            )
+                            yield _make_sse({"type": "complete", "report": msg.content})
+
+                    elif "tools" in chunk:
+                        for tm in chunk["tools"]["messages"]:
+                            if not isinstance(tm, ToolMessage):
+                                continue
+                            content = tm.content
+                            if len(content) > 800:
+                                content = content[:800] + "\n... (truncated)"
 
                             yield _make_sse({
-                                "type": "tool_call",
-                                "name": tool_name,
-                                "args": args,
-                                "call_id": call_id,
+                                "type": "tool_result",
+                                "name": tm.name,
+                                "content": content,
+                                "call_id": tm.tool_call_id,
                             })
-
-                    elif msg.content:
-                        yield _make_sse(
-                            {"type": "step_start", "step": 4, "title": "Final Recommendation"}
-                        )
-                        yield _make_sse({"type": "complete", "report": msg.content})
-
-                elif "tools" in chunk:
-                    for tm in chunk["tools"]["messages"]:
-                        if not isinstance(tm, ToolMessage):
-                            continue
-                        content = tm.content
-                        if len(content) > 800:
-                            content = content[:800] + "\n... (truncated)"
-
-                        yield _make_sse({
-                            "type": "tool_result",
-                            "name": tm.name,
-                            "content": content,
-                            "call_id": tm.tool_call_id,
-                        })
+        finally:
+            logger_task.cancel()
+            try:
+                await logger_task
+            except asyncio.CancelledError:
+                pass
 
 
 def get_agent_pool() -> AgentPool:

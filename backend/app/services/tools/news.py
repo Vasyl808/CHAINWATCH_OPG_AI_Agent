@@ -1,4 +1,4 @@
-"""LangChain tools: crypto news search and token sentiment analysis."""
+"""LangChain tool: token news sentiment analysis via DuckDuckGo."""
 
 from __future__ import annotations
 
@@ -8,55 +8,24 @@ from langchain_core.tools import tool
 
 
 @tool
-async def search_crypto_news(query: str) -> str:
+async def search_crypto_news(token_symbol: str) -> str:
     """
-    Searches for crypto news, scams, exploits, rug pulls via DuckDuckGo.
-    FREE, no key needed.
-    """
-    try:
-        try:
-            from ddgs import DDGS
-        except ImportError:
-            from duckduckgo_search import DDGS
-
-        def _do_search():
-            with DDGS() as ddgs:
-                return list(ddgs.text(query, max_results=5))
-
-        results = await asyncio.to_thread(_do_search)
-        if not results:
-            return f"No news found for '{query}'."
-        lines = [f"Latest results for '{query}':"]
-        for r in results:
-            lines.append(f"  * {r['title']}\n    {r['body']}\n    Source: {r['href']}")
-        return "\n".join(lines)
-    except Exception as e:
-        return f"Search error: {e}"
-
-
-@tool
-async def analyze_token_news(token_symbol: str) -> str:
-    """
-    3-query news analysis for a token: regulatory risk, growth signals, market
-    sentiment. Returns raw data for STRONG BUY / BUY / HOLD / SELL / AVOID signal.
-    Uses DuckDuckGo - FREE, no key needed.
+    2-query news analysis for a token: risk signals and market sentiment.
+    Returns data for STRONG BUY / BUY / HOLD / SELL / AVOID signal.
+    Uses DuckDuckGo — FREE, no key needed.
     """
     QUERIES = [
         (
-            "Risk (Regulatory + Team)",
-            f"{token_symbol} SEC CFTC lawsuit ban sanctions fraud rug pull scam 2024 2025",
+            "Risk",
+            f"{token_symbol} lawsuit ban fraud rug pull scam hack 2025",
         ),
         (
-            "Growth (Institutional + Ecosystem)",
-            f"{token_symbol} ETF institutional adoption partnership listing upgrade TVL 2025",
-        ),
-        (
-            "Sentiment (Market + Community)",
-            f"{token_symbol} analyst forecast whale sentiment FUD community outlook 2025",
+            "Sentiment",
+            f"{token_symbol} ETF adoption forecast analyst outlook 2025",
         ),
     ]
 
-    def _do_analyze():
+    def _do_analyze() -> str:
         try:
             try:
                 from ddgs import DDGS
@@ -64,35 +33,28 @@ async def analyze_token_news(token_symbol: str) -> str:
                 from duckduckgo_search import DDGS
 
             sections: list[str] = []
-            total_hits = 0
             for label, query in QUERIES:
                 try:
                     with DDGS() as ddgs:
-                        hits = list(ddgs.text(query, max_results=4))
+                        hits = list(ddgs.text(query, max_results=3))
                     if not hits:
                         continue
-                    lines = [f"\n  {label}"]
+                    lines = [f"\n  [{label}]"]
                     for h in hits:
-                        body = h.get("body", "")[:200]
-                        lines.append(
-                            f"    * [{h.get('title', '')}] {body} | {h.get('href', '')}"
-                        )
+                        body = h.get("body", "")[:150]
+                        lines.append(f"    * {h.get('title', '')} — {body}")
                     sections.append("\n".join(lines))
-                    total_hits += len(hits)
                 except Exception:
                     pass
 
             if not sections:
-                return f"No news data found for token '{token_symbol}'."
+                return f"No news data found for '{token_symbol}'."
 
-            header = (
-                f"NEWS ANALYSIS - {token_symbol.upper()}"
-                f"  ({total_hits} results, 3 queries)\n"
-                f"  Agent: assign STRONG BUY / BUY / HOLD / SELL / AVOID\n"
-                f"  based on risk, growth, and sentiment signals below.\n"
-                f"{'=' * 50}"
+            return (
+                f"NEWS — {token_symbol.upper()} | "
+                f"Assign: STRONG BUY / BUY / HOLD / SELL / AVOID\n"
+                + "\n".join(sections)
             )
-            return header + "\n".join(sections)
         except Exception as e:
             return f"Analysis error: {e}"
 
