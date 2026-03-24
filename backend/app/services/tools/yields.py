@@ -447,7 +447,7 @@ class VenusProvider(YieldProvider):
 PROVIDERS: list[YieldProvider] = [
     BeefyProvider(),
     CurveProvider(),
-    RaydiumProvider(),
+    #RaydiumProvider(),
     MorphoProvider(),
     YearnProvider(),
     VenusProvider(),
