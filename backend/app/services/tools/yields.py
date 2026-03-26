@@ -270,23 +270,58 @@ class RaydiumProvider(YieldProvider):
     label = "Raydium"
     supported_networks = {"solana", "sol"}
 
+    _BASE = "https://api-v3.raydium.io"
+    _PAGE_SIZE = 100
+
     async def _fetch(self, client, asset_upper, net_filter) -> list[dict]:
         terms = _expand_asset(asset_upper)
-        pairs: list[dict] = (await client.get(
-            "https://api.raydium.io/v2/main/pairs", timeout=TIMEOUT
-        )).json()
-
         results = []
-        for p in pairs:
-            if not _matches(p.get("name", ""), terms):
-                continue
-            apr = float(p.get("apr24h") or p.get("apr") or 0)
-            tvl = float(p.get("liquidity") or 0)
-            if tvl < TVL_MIN_USD:
-                continue
-            results.append(_make_pool("Raydium", p.get("name", "?"), "solana", apr, tvl))
-        return results
 
+        for pool_type in ("standard", "concentrated"):
+            page = 1
+            while True:
+                resp = await client.get(
+                    f"{self._BASE}/pools/info/list",
+                    params={
+                        "poolType": pool_type,
+                        "poolSortField": "liquidity",  # ← було "tvl" — ламало API
+                        "sortType": "desc",
+                        "pageSize": self._PAGE_SIZE,
+                        "page": page,
+                    },
+                    timeout=TIMEOUT,
+                )
+                resp.raise_for_status()
+                body = resp.json()
+
+                pools: list[dict] = body.get("data", {}).get("data", [])
+                if not pools:
+                    break
+
+                for p in pools:
+                    mint_a = p.get("mintA", {}).get("symbol", "")
+                    mint_b = p.get("mintB", {}).get("symbol", "")
+                    name = f"{mint_a}-{mint_b}"
+
+                    if not _matches(name, terms):
+                        continue
+
+                    tvl = float(p.get("tvl") or 0)
+                    if tvl < TVL_MIN_USD:
+                        continue
+
+                    day = p.get("day") or {}
+                    week = p.get("week") or {}
+                    apr = float(day.get("apr") or week.get("apr") or 0)
+
+                    results.append(_make_pool("Raydium", name, "solana", apr, tvl))
+
+                if float(pools[-1].get("tvl") or 0) < TVL_MIN_USD:
+                    break
+
+                page += 1
+
+        return results
 
 # ── Morpho Blue (Ethereum + Base) ─────────────────────────────────────────────
 
@@ -447,7 +482,7 @@ class VenusProvider(YieldProvider):
 PROVIDERS: list[YieldProvider] = [
     BeefyProvider(),
     CurveProvider(),
-    #RaydiumProvider(),
+    RaydiumProvider(),
     MorphoProvider(),
     YearnProvider(),
     VenusProvider(),
