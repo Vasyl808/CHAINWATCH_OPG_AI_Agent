@@ -72,6 +72,7 @@ def _make_pool(
     chain:   str,
     apy_pct: float,
     tvl_usd: float,
+    url:     str = "",
 ) -> dict[str, Any]:
     return {
         "project": project,
@@ -79,6 +80,7 @@ def _make_pool(
         "chain":   chain,
         "apy":     round(min(apy_pct, APY_MAX_PCT), 4),
         "tvl":     tvl_usd,
+        "url":     url,
     }
 
 
@@ -203,7 +205,8 @@ class BeefyProvider(YieldProvider):
             if tvl_usd < TVL_MIN_USD:
                 continue
 
-            results.append(_make_pool("Beefy", v.get("name", vault_id), chain, apy_pct, tvl_usd))
+            beefy_url = f"https://app.beefy.com/vault/{vault_id}"
+            results.append(_make_pool("Beefy", v.get("name", vault_id), chain, apy_pct, tvl_usd, beefy_url))
 
         return results
 
@@ -251,8 +254,10 @@ class CurveProvider(YieldProvider):
                     if tvl < TVL_MIN_USD:
                         continue
 
-                    name = p.get("name") or p.get("id") or "?"
-                    out.append(_make_pool("Curve", name, chain, base_apy + crv_apy + reward_sum, tvl))
+                    name     = p.get("name") or p.get("id") or "?"
+                    pool_id  = p.get("id") or ""
+                    curve_url = f"https://curve.fi/#/{chain}/pools/{pool_id}/deposit" if pool_id else "https://curve.fi"
+                    out.append(_make_pool("Curve", name, chain, base_apy + crv_apy + reward_sum, tvl, curve_url))
                 return out
             except Exception:
                 return []
@@ -314,7 +319,12 @@ class RaydiumProvider(YieldProvider):
                     week = p.get("week") or {}
                     apr = float(day.get("apr") or week.get("apr") or 0)
 
-                    results.append(_make_pool("Raydium", name, "solana", apr, tvl))
+                    pool_id = p.get("id", "")
+                    raydium_url = (
+                        f"https://raydium.io/liquidity/increase/?mode=add&pool_id={pool_id}"
+                        if pool_id else "https://raydium.io/liquidity/"
+                    )
+                    results.append(_make_pool("Raydium", name, "solana", apr, tvl, raydium_url))
 
                 if float(pools[-1].get("tvl") or 0) < TVL_MIN_USD:
                     break
@@ -370,8 +380,10 @@ class MorphoProvider(YieldProvider):
             if tvl_usd < TVL_MIN_USD:
                 continue
 
-            name = f"{col_sym}/{loan_sym}" if col_sym else loan_sym
-            results.append(_make_pool("Morpho Blue", name, "ethereum", apy_pct, tvl_usd))
+            name       = f"{col_sym}/{loan_sym}" if col_sym else loan_sym
+            unique_key = m.get("uniqueKey", "")
+            morpho_url = f"https://app.morpho.org/market?id={unique_key}" if unique_key else "https://app.morpho.org"
+            results.append(_make_pool("Morpho Blue", name, "ethereum", apy_pct, tvl_usd, morpho_url))
 
         return results
 
@@ -416,12 +428,19 @@ class YearnProvider(YieldProvider):
                 if tvl_usd < TVL_MIN_USD:
                     continue
 
+                vault_addr = v.get("address", "")
+                chain_id   = _YEARN_CHAIN_IDS.get(chain, 1)
+                yearn_url  = (
+                    f"https://yearn.fi/vaults/{chain_id}/{vault_addr}"
+                    if vault_addr else "https://yearn.fi/vaults"
+                )
                 out.append(_make_pool(
                     "Yearn",
                     v.get("display_name") or v.get("name", "?"),
                     chain,
                     apy_pct,
                     tvl_usd,
+                    yearn_url,
                 ))
             return out
 
@@ -466,12 +485,14 @@ class VenusProvider(YieldProvider):
             if tvl_usd < TVL_MIN_USD:
                 continue
 
+            venus_url = "https://app.venus.io/markets"
             results.append(_make_pool(
                 "Venus",
                 f"{underlying} (Venus {vsymbol})",
                 "bsc",
                 apy_pct,
                 tvl_usd,
+                venus_url,
             ))
         return results
 
@@ -557,8 +578,9 @@ async def get_defi_yields(asset: str, network: str = "") -> str:
             if pool["tvl"] >= 1_000_000
             else f"${pool['tvl'] / 1_000:.0f}K"
         )
+        url_part = f"\n     🔗 {pool['url']}" if pool.get("url") else ""
         lines.append(
             f"  {i}. {pool['project']} — {pool['name']} ({pool['chain']}): "
-            f"{pool['apy']:.2f}% APY  |  TVL {tvl_str}"
+            f"{pool['apy']:.2f}% APY  |  TVL {tvl_str}{url_part}"
         )
     return "\n".join(lines)

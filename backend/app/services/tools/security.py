@@ -78,8 +78,10 @@ async def get_historical_hacks(protocol_or_token: str) -> str:
         name = h.get("name", h.get("protocol", protocol_or_token))
         net_loss = (lost or 0) - (returned or 0)
         returned_str = f", ${returned/1e6:.1f}M returned" if returned else ", no funds returned"
+        source_url = h.get("url", h.get("link", h.get("sourceUrl", "")))
+        url_str = f" | url: {source_url}" if source_url else ""
         lines.append(
             f"  * [{date}] {name} - ${(lost or 0)/1e6:.1f}M lost{returned_str}"
-            f" | Attack: {attack} | Net loss: ${net_loss/1e6:.1f}M"
+            f" | Attack: {attack} | Net loss: ${net_loss/1e6:.1f}M{url_str}"
         )
     return "\n".join(lines)
